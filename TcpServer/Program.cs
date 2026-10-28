@@ -7,8 +7,13 @@ namespace a
     {
         static void Main()
         {
-            TcpServer t = new TcpServer("127.0.0.1", 5050);
+            string ip = "192.168.0.134";
+            int port = 5050;
+            TcpServer t = new TcpServer(ip,port);
+            Console.WriteLine("正在监听:" + ip + ":" + port.ToString());
             t.Start();
+
+            Console.ReadLine();
         }
     }
 }
