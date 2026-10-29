@@ -12,7 +12,7 @@ namespace a
     /// <summary>
     /// 被动监听
     /// </summary>
-    internal class TcpServer
+    internal class MyTcpServer
     {
         public string IP;
         public int Port;
@@ -23,20 +23,10 @@ namespace a
         public volatile bool IsContinue;
 
         public event EventHandler<ClientConnectedEventArgs>? ClientConnected;//事件 有客户端成功连接
+        public event EventHandler? ClientDisConnected; //事件 有客户端断开连接,这个事件会直接给到客户端，这里只做一个转发的功能
+        public event EventHandler<DataReceivedEventArgs>? ClientDataReceived;//事件 客户端收到消息，这个事件会直接给到客户端，这里只做一个转发的功能
 
-
-        public class ClientConnectedEventArgs : EventArgs
-        {
-            public ClientSocket ClientSocket;
-            public ClientConnectedEventArgs(ClientSocket clientSocket)
-            {
-                this.ClientSocket = clientSocket;
-            }
-        }
-
-
-
-        public TcpServer(string ip, int port)
+        public MyTcpServer(string ip, int port)
         {
             try
             {
@@ -76,27 +66,10 @@ namespace a
                             ClientSocket clientSocket = new ClientSocket(socket2);
 
                             //当客户端收到数据，填写回调函数
-                            clientSocket.DataReceived += (sender, e) =>
-                            {
-                                ClientSocket? clientSocket = (ClientSocket?)sender;
-                                if (clientSocket == null) return;
-                                Console.WriteLine(clientSocket.IP + ":" + clientSocket.Port.ToString() + " 接收到：" + Encoding.UTF8.GetString(clientSocket.GetOriginalData()));
-                            };
+                            clientSocket.DataReceived += this.ClientDataReceived;
 
                             //当客户端关闭连接，填写回调函数
-                            clientSocket.ConnectClosed += (sender,e) => 
-                            {
-                                ClientSocket? clientSocket = (ClientSocket?)sender;
-                                if (clientSocket == null) return;
-                                lock(_lock)
-                                {
-                                    if (ClientSockets.Contains(clientSocket) == true)
-                                    {
-                                        Console.WriteLine(clientSocket.IP + ":" + clientSocket.Port.ToString() + "断开连接");
-                                        ClientSockets.Remove(clientSocket);
-                                    }
-                                }
-                            };
+                            clientSocket.ConnectClosed += this.ClientDisConnected;
 
                             lock(_lock)
                             {
@@ -171,7 +144,23 @@ namespace a
         }
     }
 
-    internal class ClientSocket
+    public class ClientConnectedEventArgs : EventArgs
+    {
+        public ClientSocket ClientSocket;
+        public ClientConnectedEventArgs(ClientSocket clientSocket)
+        {
+            this.ClientSocket = clientSocket;
+        }
+    }
+    public class DataReceivedEventArgs : EventArgs
+    {
+        public byte[] Data { get; }
+        public DataReceivedEventArgs(byte[] data)
+        {
+            this.Data = data;
+        }
+    }
+    public class ClientSocket
     {
         public Socket socket;
         public string IP;
@@ -181,14 +170,7 @@ namespace a
         public int OriginalDataLength;
         public event EventHandler? ConnectClosed;//事件 客户端断开连接
         public event EventHandler<DataReceivedEventArgs>? DataReceived;//事件 客户端收到消息
-        public class DataReceivedEventArgs : EventArgs
-        {
-            public byte[] Data { get; }
-            public DataReceivedEventArgs(byte[] data)
-            {
-                this.Data = data;
-            }
-        }
+        
 
         public ClientSocket(Socket socket)
         {
@@ -304,10 +286,8 @@ namespace a
                     socket.Close();
                 }
             }
-            catch
-            {
-                throw;
-            }
+            catch (ObjectDisposedException) { }
+            catch { throw; }
         }
 
 
